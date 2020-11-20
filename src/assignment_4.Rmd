@@ -1,0 +1,166 @@
+---
+title: "Snowshoe Exploratory Report"
+author: "Emiliano Espinoza"
+date: "11/18/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message =FALSE, warning = FALSE)
+library(tidyverse)
+library(janitor)
+library(here)
+library(ggpubr)
+library(broom)
+library(effsize)
+library(broom)
+library(palmerpenguins)
+library(ggbeeswarm)
+library(kableExtra)
+library(lubridate)
+library(scales)
+
+snowshoe <- read_csv(here("data", "bonanza_hares.csv"))
+```
+
+### 1. Overview
+
+This report provides an exploratory overview of differences in penguin sizes for three species of nesting adult penguins (gentoo, chinstrap and Adélie) observed on islands within the Palmer Archipelago from 2007 - 2009 (Gorman et al. 2014). Specifically, flipper lengths are compared across the three species, and the relationship(s) between flipper length and body mass explored. *Note: A 4 - 5 sentence "mini-introduction" to what this study is exploring, including basic background information about the subject, site and study (with citations as needed), and a brief overview of what is included in the exploratory report*
+
+### 2. Data and Analyses
+
+Penguin structural size measurements were collected and made available by Dr. Kristen Gorman and colleagues at the Palmer Station Long Term Ecological Research (LTER) network site in Palmer Archipelago, Antarctica (see map from Gorman et al. (2014) in Figure 1). The data contain observations for 344 unique nesting penguins, collected over three seasons (2007, 2008, 2009). Following exploratory data visualization, flipper lengths between male and female penguins are by two-sample t-tests using a significance level ($\alpha$) of 0.05 throughout. Differences between groups are described by Cohen's *d* effect size. The relationship between flipper length and body mass is explored by simple linear regression. All analyses are in R version 4.0.2 using RStudio version 1.3.1056. *Note:A 3 - 4 sentence section in which you briefly describe the data, including citation & credit as needed, and provide an overview of the main analysis, statistical methods and tools used.* 
+
+### 3. Exploratory Findings
+
+#### A. Juvenile Snowshoe Hare Trap Counts
+
+```{r}
+juvenile <- snowshoe %>%
+  filter(age == "j") %>% 
+  mutate(date = mdy(date)) %>% #Doesn't like YMD format
+  mutate(year = year(date))
+
+juvenile_count <- juvenile %>% 
+  count(year) %>% 
+  summarize(
+    mean_count = mean(n),
+    median_count = median(n),
+    sd_count = sd(n),
+    max_count = max(n),
+    min_count = min(n))
+```
+
+**Table 1.** Descriptive statistics (mean, standard deviation, and sample size) of annual juvenile hare trappings per year. Data: Kielland et al. (2017).
+
+```{r descriptive_stats}
+juvenile_count %>% 
+  kable(col.names = c("Mean count per year", "Median count per year", "Standard deviation", "Maximum per year", "Minimum per year")) %>% 
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+```
+
+```{r juvenile_count_plot, fig.align = "center"}
+ggplot(data = juvenile, aes(x = year)) +
+  geom_histogram(fill = "blue") +
+  theme_minimal() +
+  labs(x = "Year",
+       y = "Juvenile Trappings",
+       title = "Annual Juvenile Hare Trap Counts") +
+  scale_x_continuous(breaks = pretty_breaks(n = 12)) + # Allows you to further depict information of x axis.
+  scale_y_continuous(breaks = pretty_breaks(n = 7)) # ""
+```
+
+**Figure 1.** Juvenile Snowshoe Hare trapping count (y-axis) per year of study (x-axis), excluding years 2002 and 2009 in which there is no data collected for those years.
+Data: Kielland et al. (2017). 
+
+Table 1 and Figure 2 depict trapping count data from all sites across the years collected for the study. The varied distributions conveyed minimum (`r juvenile_count$min_count`, in 2010) and maximum (`r juvenile_count$max_count`, in 1999) counts of juvenile hare trappings, as well as mean (`r juvenile_count$mean_count`) and median (`r juvenile_count$median_count`) values with a standard deviation of (`r juvenile_count$sd_count`). There is a notable trend of trapping count observations decline throughout the years. One could conclude a number of different extrapolations from this trend. There should be further investigation moving forward into the possible variables that could impact these count numbers, e.g. the number of days and traps each year, to gain a better perspective from which a more informed analyzation of trends can occur.
+
+#### B. Visual of Juvenile Hare Weights
+
+```{r juvenile_weight_graph, fig.align = "center"}
+juvenile %>% 
+  ggplot(aes(x = sex, y = weight)) +
+  geom_beeswarm(aes(color = sex)) +
+  facet_wrap("grid") + # Allows you to convey data for more than one observation within a variable
+  geom_boxplot(fill = NA, width = 0.2, outlier.color = NA) +
+  stat_summary(fun = mean, 
+               geom = "point", 
+               shape = 20, 
+               size = 4, 
+               color = "black", 
+               fill = "black") +
+  labs(x = "Sex",
+       y = "Weight(g)",
+       title = "Juvenile Snowshoe Hare Weight by Sex at Three Different Sites") +
+    scale_x_discrete(labels = c("Female", "Male", "N/A")) +
+  theme(legend.position = "none") # take out legend in graph
+```
+
+**Figure 2.** Juvenile snowshoe hare weights (grams) compared by sex (Coral (Female), Teal (Male) and Grey (N/A)) across the three different sites data was collected at for study. Weight is depicted on the y axis and visual separation by sex type on the x axis. Results for Third category for sex, N/A, is included.
+
+Figure 3 depicts the differences in weight between sexes at each site location. Visual conveys differing trends at each site. For the bonbs site, female weights vary more significantly with greater distributions of weight than male weights. For the bonmat site, the distribution range of weights between sexes is pretty similar with an exception of slightly lower weight distributions with females. This trend also holds true at the bonrip site, however this site does convey the greatest density of weight distributions between all three sites.  
+
+#### C. Juvenile Weight Comparisons
+
+**Table 2.** Comparing juvenile snowshoe hare weights between male and female sexes with summary statistics that include mean, median, and standard deviation of weights across both sexes, as well as sample size. 
+```{r weight_summary_stats}
+weight_stats <- juvenile %>%
+  group_by(sex) %>% 
+  summarize(mean_weight = round(mean(na.omit(weight)),2), # na.omit takes out N/A observations within a variable
+            median_weight = median(na.omit(weight)),
+            sd_weight = round(sd(na.omit(weight)), 2),
+            n = n())
+
+weight_stats %>% 
+  kable(col.names = c("Sex", "Mean weight", "Median weight", "Standard deviation", "Sample Size")) %>% 
+  kable_styling(bootstrap_options = "striped", full_width = FALSE)
+```
+
+```{r summary_stats_pt3}
+
+#####put back in include = FALSE
+
+
+
+#Create female and male stats to perform exploratory graphs and analyses
+snwhares_f <- juvenile %>% 
+  filter(sex == "f") %>% 
+  pull(weight) %>% 
+  na.omit()
+
+snwhares_m <- juvenile %>% 
+  filter(sex == "m") %>% 
+  pull(weight) %>% 
+  na.omit()
+
+# Plot histograms & qq-plots to check assumptions
+hist(snwhares_f) # Normal Distribution
+qqnorm(snwhares_f) # Linear
+
+hist(snwhares_m) # Somewhat Normal Distribution
+qqnorm(snwhares_m) # Linear
+
+#T-test
+snwhare_ttest <- t.test(snwhares_f, snwhares_m)
+
+#Cohen's d
+snwhare_effsize <- cohen.d(snwhares_f, snwhares_m)
+
+#Get difference in actual means
+diff_means <- abs(weight_stats %>% 
+  filter(sex == "f") %>% 
+  select(mean_weight)) -
+  (weight_stats %>% 
+  filter(sex == "m") %>% 
+  select(mean_weight))
+```
+
+On average, observed female juvenile snowshoe hare weights (`r weight_stats %>% filter(sex == "f") %>% select(mean_weight) %>%  pull(mean_weight)) are less than that of observed male weights (`r round(male_mean,2)` $\pm$). The difference in means between male and female hares (`r abs(diff_means)`) in (g). Cohen's D effect size is very low (`r hare_cohend$estimate`), and t-test give a p-value of (`r hare_ttest$p.value`). With the given statistics, we can safely reject the null hypothesis and assume male and female weights are significantly different groups. 
+
+On average, adult male gentoo penguins have longer flippers than adult female gentoos (221.54 ± 5.67 and 212.71 ± 3.9 mm, respectively; mean ± 1 standard deviation). While the absolute difference in means is 8.83 mm (a 4.07% difference), the difference in means is significant (Welch’s two-sample t-test: t(106.69) = 9.94, p < 0.001), and the effect size is large (Cohen’s d = 1.81).
+
+
+
+
+
+
